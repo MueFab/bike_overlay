@@ -1,3 +1,19 @@
+"""
+GPX Data Processor
+
+This script processes GPX files, interpolates missing data points, calculates speed and distance,
+and exports the data to a CSV file. The GPX file is parsed to extract relevant details such as
+latitude, longitude, elevation, time, temperature, heart rate, and cadence. Missing data points
+are filled based on interpolation, and the script calculates additional metrics like speed,
+total distance, ascent, and descent.
+
+Usage:
+    python 1_parse_gpx.py <gpx_input_file> <csv_output_file>
+
+Author: Fabian Müntefering
+Date: 2024-07-27
+"""
+
 import gpxpy
 import gpxpy.gpx
 import datetime
@@ -5,8 +21,17 @@ import csv
 import sys
 from geopy.distance import distance
 
-
 def parse_gpx(file_path):
+    """
+    Parses the GPX file and extracts relevant data points.
+
+    Args:
+        file_path (str): Path to the GPX file.
+
+    Returns:
+        list: A list of dictionaries containing point data such as latitude, longitude,
+              elevation, time, temperature, heart rate, and cadence.
+    """
     with open(file_path, 'r') as gpx_file:
         gpx = gpxpy.parse(gpx_file)
     points = []
@@ -35,8 +60,16 @@ def parse_gpx(file_path):
                 })
     return points
 
-
 def fill_gaps(points):
+    """
+    Fills gaps in the data by interpolating missing points.
+
+    Args:
+        points (list): A list of dictionaries containing the original data points.
+
+    Returns:
+        list: A list of dictionaries with interpolated data points added.
+    """
     filled_points = []
     for i in range(len(points) - 1):
         filled_points.append(points[i])
@@ -60,8 +93,20 @@ def fill_gaps(points):
     filled_points.append(points[-1])
     return filled_points
 
-
 def interpolate(value1, value2, current_time, time1, time2):
+    """
+    Interpolates a value based on two data points and a time ratio.
+
+    Args:
+        value1 (float or int): The value at the starting time.
+        value2 (float or int): The value at the ending time.
+        current_time (datetime): The time at which to interpolate.
+        time1 (datetime): The starting time.
+        time2 (datetime): The ending time.
+
+    Returns:
+        float or int: The interpolated value.
+    """
     if value1 is None or value2 is None:
         return None
     time_ratio = (current_time - time1).total_seconds() / (time2 - time1).total_seconds()
@@ -69,6 +114,15 @@ def interpolate(value1, value2, current_time, time1, time2):
 
 
 def calculate_speed_and_distance(points):
+    """
+    Calculates the speed and distance metrics for each data point.
+
+    Args:
+        points (list): A list of dictionaries containing data points.
+
+    Returns:
+        list: A list of dictionaries with speed and distance metrics added.
+    """
     total_distance = 0
     total_ascent = 0
     total_descent = 0
@@ -99,11 +153,27 @@ def calculate_speed_and_distance(points):
     points[0]['total_descent'] = 0
     return points
 
-
 def format_timestamp(dt):
+    """
+    Formats the datetime object to a string in the specified format.
+
+    Args:
+        dt (datetime): The datetime object.
+
+    Returns:
+        str: The formatted timestamp string.
+    """
     return dt.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
 
+
 def save_to_csv(points, csv_file):
+    """
+    Saves the processed data points to a CSV file.
+
+    Args:
+        points (list): A list of dictionaries containing processed data points.
+        csv_file (str): The path to the output CSV file.
+    """
     with open(csv_file, 'w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(['time', 'latitude', 'longitude', 'elevation', 'temperature', 'heart_rate', 'cadence', 'speed',
@@ -125,6 +195,9 @@ def save_to_csv(points, csv_file):
 
 
 def main():
+    """
+    The main function to run the GPX data processing script.
+    """
     if len(sys.argv) != 3:
         print("Usage: extract_gpx_data.py <gpx_file> <csv_file>")
         sys.exit(1)

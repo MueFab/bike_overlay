@@ -1,6 +1,25 @@
+"""
+GPS Data Video Overlay Generator
+
+This script processes GPS data from a CSV file, generates overlay images that display
+information such as location, elevation, heart rate, and speed, and creates map and
+elevation profile plots for video overlays.
+
+Usage:
+    python generate_frames.py <gps_csv_file> <start_timestamp> <end_timestamp>
+
+Dependencies:
+    - matplotlib
+    - PIL (Pillow)
+    - geopy
+
+Author: Fabian Müntefering
+Date: 2024-07-27
+"""
+
 import datetime
 import matplotlib
-matplotlib.use('Agg')  # Use the 'Agg' backend
+matplotlib.use('Agg')  # Use the 'Agg' backend for non-GUI environments
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 from geopy.distance import distance
@@ -9,7 +28,17 @@ import sys
 import csv
 import concurrent.futures
 
+
 def parse_csv(file_path):
+    """
+    Parses the CSV file containing GPS data points.
+
+    Args:
+        file_path (str): The path to the CSV file.
+
+    Returns:
+        list: A list of dictionaries containing parsed data points.
+    """
     points = []
     with open(file_path, 'r') as csvfile:
         reader = csv.DictReader(csvfile)
@@ -29,8 +58,19 @@ def parse_csv(file_path):
             })
     return points
 
+
 def interpolate_data(points, timestamp):
-    before = after = None
+    """
+    Interpolates data for a given timestamp between two known data points.
+
+    Args:
+        points (list): A list of dictionaries containing data points.
+        timestamp (datetime): The timestamp for which to interpolate data.
+
+    Returns:
+        dict: A dictionary containing the interpolated data point.
+    """
+    before, after = None, None
     for i in range(len(points) - 1):
         if points[i]['time'] <= timestamp <= points[i + 1]['time']:
             before = points[i]
@@ -46,9 +86,9 @@ def interpolate_data(points, timestamp):
         'latitude': before['latitude'] + (after['latitude'] - before['latitude']) * time_ratio,
         'longitude': before['longitude'] + (after['longitude'] - before['longitude']) * time_ratio,
         'elevation': before['elevation'] + (after['elevation'] - before['elevation']) * time_ratio,
-        'temperature': before['temperature'] + (after['temperature'] - before['temperature']) * time_ratio if before['temperature'] is not None and after['temperature'] is not None else None,
-        'heart_rate': before['heart_rate'] + (after['heart_rate'] - before['heart_rate']) * time_ratio if before['heart_rate'] is not None and after['heart_rate'] is not None else None,
-        'cadence': before['cadence'] + (after['cadence'] - before['cadence']) * time_ratio if before['cadence'] is not None and after['cadence'] is not None else None,
+        'temperature': (before['temperature'] + (after['temperature'] - before['temperature']) * time_ratio) if before['temperature'] is not None and after['temperature'] is not None else None,
+        'heart_rate': (before['heart_rate'] + (after['heart_rate'] - before['heart_rate']) * time_ratio) if before['heart_rate'] is not None and after['heart_rate'] is not None else None,
+        'cadence': (before['cadence'] + (after['cadence'] - before['cadence']) * time_ratio) if before['cadence'] is not None and after['cadence'] is not None else None,
         'timestamp': timestamp,
         'speed': before['speed'] + (after['speed'] - before['speed']) * time_ratio,
         'total_distance': before['total_distance'] + (after['total_distance'] - before['total_distance']) * time_ratio,
@@ -58,11 +98,24 @@ def interpolate_data(points, timestamp):
 
     return interpolated_point
 
+
 def create_map(route_points, current_point, width, height):
+    """
+    Creates a map plot showing the route and the current position.
+
+    Args:
+        route_points (list): List of route points containing latitude and longitude.
+        current_point (dict): The current data point to highlight on the map.
+        width (int): The width of the plot.
+        height (int): The height of the plot.
+
+    Returns:
+        Image: A PIL Image object containing the map plot.
+    """
     fig, ax = plt.subplots(figsize=(width / 80, height / 80))
     fig.patch.set_facecolor((0, 0, 1))  # Set figure background to blue
     ax.set_facecolor((0, 0, 1))  # Set axis background to blue
-    ax.axis('off')  # Ensure axis is turned off
+    ax.axis('off')  # Turn off axis
 
     try:
         lats, lons = zip(*[(point['latitude'], point['longitude']) for point in route_points])
@@ -72,11 +125,11 @@ def create_map(route_points, current_point, width, height):
 
     ax.plot(lons, lats, 'k-', linewidth=4)  # Black border
     ax.plot(lons, lats, 'w-', linewidth=2)  # White line
-    ax.plot(current_point['longitude'], current_point['latitude'], 'ro')  # Current position
+    ax.plot(current_point['longitude'], current_point['latitude'], 'ro')  # Current position marker
 
     ax.set_aspect('equal', adjustable='box')  # Ensure equal scaling
 
-    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)  # Remove any margins
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)  # Remove margins
     fig.canvas.draw()
 
     # Save the plot to a PIL Image
@@ -84,7 +137,20 @@ def create_map(route_points, current_point, width, height):
     plt.close(fig)
     return map_image
 
+
 def create_elevation_profile(route_points, current_point, width, height):
+    """
+    Creates an elevation profile plot showing the route elevation and the current position.
+
+    Args:
+        route_points (list): List of route points containing elevation data.
+        current_point (dict): The current data point to highlight on the elevation profile.
+        width (int): The width of the plot.
+        height (int): The height of the plot.
+
+    Returns:
+        Image: A PIL Image object containing the elevation profile plot.
+    """
     fig, ax = plt.subplots(figsize=(width / 65, height / 65))
     fig.patch.set_facecolor((0, 0, 1))  # Set figure background to blue
     ax.set_facecolor((0, 0, 1))  # Set axis background to blue
@@ -94,8 +160,7 @@ def create_elevation_profile(route_points, current_point, width, height):
 
     ax.plot(distances, elevations, 'k-', linewidth=4)  # Black border
     ax.plot(distances, elevations, 'w-', linewidth=2)  # White line
-
-    ax.plot(current_point['total_distance'], current_point['elevation'], 'ro')  # Current elevation
+    ax.plot(current_point['total_distance'], current_point['elevation'], 'ro')  # Current elevation marker
 
     ax.axis('off')  # Remove x/y axis and labels
     fig.canvas.draw()
@@ -105,7 +170,20 @@ def create_elevation_profile(route_points, current_point, width, height):
     plt.close(fig)
     return elevation_image
 
+
 def draw_text_with_border(draw, text, position, font, border_width, fill_color, border_color):
+    """
+    Draws text with a border on an image.
+
+    Args:
+        draw (ImageDraw.Draw): The drawing context.
+        text (str): The text to draw.
+        position (tuple): The position to draw the text.
+        font (ImageFont): The font to use for the text.
+        border_width (int): The width of the border.
+        fill_color (str): The color of the text fill.
+        border_color (str): The color of the border.
+    """
     x, y = position
     # Draw border
     for dx in range(-border_width, border_width + 1):
@@ -115,8 +193,20 @@ def draw_text_with_border(draw, text, position, font, border_width, fill_color, 
     # Draw fill
     draw.text(position, text, font=font, fill=fill_color)
 
+
 def create_overlay_image(interpolated_point, map_image, elevation_image):
-    # Create an empty image with blue background
+    """
+    Creates an overlay image containing GPS data and visual elements for video overlays.
+
+    Args:
+        interpolated_point (dict): The interpolated data point to display.
+        map_image (Image): The map image.
+        elevation_image (Image): The elevation profile image.
+
+    Returns:
+        Image: A PIL Image object containing the combined overlay.
+    """
+    # Create an empty image with a blue background
     img = Image.new('RGB', (1920, 1080), color=(0, 0, 255))  # Blue background
     draw = ImageDraw.Draw(img)
 
@@ -158,7 +248,18 @@ def create_overlay_image(interpolated_point, map_image, elevation_image):
 
     return img
 
+
 def create_video_overlay_image(points, timestamp_str):
+    """
+    Generates an overlay image for a video frame at a specific timestamp.
+
+    Args:
+        points (list): List of data points containing GPS data.
+        timestamp_str (str): The timestamp string for the current frame.
+
+    Returns:
+        Image: A PIL Image object containing the overlay for the video frame.
+    """
     timestamp = datetime.datetime.fromisoformat(timestamp_str)
     interpolated_point = interpolate_data(points, timestamp)
 
@@ -175,13 +276,29 @@ def create_video_overlay_image(points, timestamp_str):
 
     return overlay_image
 
+
 def generate_frame(points, timestamp_str, frame_dir):
+    """
+    Generates a frame image for a specific timestamp and saves it.
+
+    Args:
+        points (list): List of data points containing GPS data.
+        timestamp_str (str): The timestamp string for the current frame.
+        frame_dir (str): The directory to save the frame image.
+
+    Returns:
+        str: The path to the saved frame image.
+    """
     frame = create_video_overlay_image(points, timestamp_str)
     frame_path = os.path.join(frame_dir, f"frame_{timestamp_str}.png")
     frame.save(frame_path)
     return frame_path
 
+
 def main():
+    """
+    Main function to run the GPS data video overlay generation script.
+    """
     if len(sys.argv) != 4:
         print("Usage: generate_frames.py <gps_csv_file> <start_timestamp> <end_timestamp>")
         sys.exit(1)
@@ -214,6 +331,7 @@ def main():
                 print(f'Generated frame: {frame_path}')
             except Exception as exc:
                 print(f'Generated an exception: {exc}')
+
 
 if __name__ == "__main__":
     main()

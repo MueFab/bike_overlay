@@ -1,13 +1,35 @@
+"""
+TCX and GPX Data Processor
+
+This script processes TCX files to extract time, distance, and speed data points, fills in gaps in the data,
+and integrates this information into a pre-existing GPX CSV file, replacing the original speed and distance data.
+
+Usage:
+    python 2_patch_tcx.py <tcx_input_file> <gpx_csv_input_file> <output_csv_file>
+
+Author: Fabian Müntefering
+Date: 2024-07-27
+"""
+
 import xml.etree.ElementTree as ET
 import csv
 import sys
 from datetime import datetime, timedelta
 
+
 def parse_tcx(file_path):
+    """
+    Parses a TCX file and extracts trackpoint data including time, distance, and speed.
+
+    Args:
+        file_path (str): The path to the TCX file.
+
+    Returns:
+        list: A list of dictionaries containing parsed data points.
+    """
     tree = ET.parse(file_path)
     root = tree.getroot()
 
-    # Define namespaces to search within the TCX file
     namespaces = {
         'tcx': 'http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2',
         'ns3': 'http://www.garmin.com/xmlschemas/ActivityExtension/v2'
@@ -26,11 +48,21 @@ def parse_tcx(file_path):
         points.append({
             'time': time,
             'distance_meters': round(distance, 3),
-            'speed': round(speed * 3.6, 1)
+            'speed': round(speed * 3.6, 1)  # Convert m/s to km/h
         })
     return points
 
+
 def fill_gaps(points):
+    """
+    Fills gaps in the TCX data by interpolating missing data points, assuming speed of zero during the gap.
+
+    Args:
+        points (list): A list of dictionaries containing the original data points.
+
+    Returns:
+        list: A list of dictionaries with gaps filled.
+    """
     filled_points = []
     for i in range(len(points) - 1):
         filled_points.append(points[i])
@@ -47,7 +79,16 @@ def fill_gaps(points):
     filled_points.append(points[-1])
     return filled_points
 
+
 def replace_gpx_with_tcx(gpx_csv, tcx_points, output_csv):
+    """
+    Replaces speed and distance data in GPX CSV with data from TCX points.
+
+    Args:
+        gpx_csv (str): The path to the GPX CSV file.
+        tcx_points (list): A list of dictionaries containing TCX data points.
+        output_csv (str): The path to the output CSV file.
+    """
     # Read GPX CSV
     gpx_points = []
     with open(gpx_csv, 'r') as file:
@@ -73,7 +114,11 @@ def replace_gpx_with_tcx(gpx_csv, tcx_points, output_csv):
         for point in gpx_points:
             writer.writerow(point)
 
+
 def main():
+    """
+    The main function to run the TCX and GPX data processing script.
+    """
     if len(sys.argv) != 4:
         print("Usage: replace_gpx_with_tcx.py <tcx_file> <gpx_csv_file> <output_csv_file>")
         sys.exit(1)
@@ -85,6 +130,7 @@ def main():
     tcx_points = parse_tcx(tcx_file)
     tcx_points = fill_gaps(tcx_points)
     replace_gpx_with_tcx(gpx_csv_file, tcx_points, output_csv_file)
+
 
 if __name__ == "__main__":
     main()
